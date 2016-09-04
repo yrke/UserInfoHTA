@@ -1,0 +1,237 @@
+<!-- saved from url=(0016)http://localhost --> 
+<head>
+<title>User Info</title>
+<HTA:APPLICATION
+     ID="objTestHTA"
+     APPLICATIONNAME="User Info"
+     SCROLL="YES"
+     WINDOWSTATE="normal"
+>
+</head>
+
+<script language=vbscript>
+sub DoResize
+    'resize   
+    window.resizeTo 620,700
+    screenWidth = Document.ParentWindow.Screen.AvailWidth
+    screenHeight = Document.ParentWindow.Screen.AvailHeight
+    posLeft = (screenWidth - 700) / 2
+    posTop = (screenHeight - 430) / 2     
+    'move to centerscreen
+    'window.moveTo posLeft, posTop
+end sub
+DoResize()
+
+Sub Window_onLoad
+
+arrCommands = Split(objTestHTA.commandLine, chr(32))
+
+if Ubound(arrCommands) >= 1 then 
+    if arrCommands(1) <> "" then 
+      username.value = arrCommands(1)  
+      buttonSeachUser_OnClick
+    end if
+end if
+
+
+End Sub 
+    
+
+Function  htmlhelpercreateTableRow(key,value)
+ 
+    htmlhelpercreateTableRow = "<tr><td>" & key &"</td><td>"& value &"</td></tr>"
+
+end Function 
+
+Function convertADDataToStr(dateObj)
+   objUser = dateObj
+
+   if IsObject(objUser) then 
+    intLogonTime = objUser.HighPart * (2^32) + objUser.LowPart 
+    intLogonTime = intLogonTime / (60 * 10000000)
+    intLogonTime = intLogonTime / 1440
+    tmpStr = intLogonTime + #1/1/1601#
+   end if 
+
+   convertADDataToStr = tmpStr
+
+end Function 
+
+sub buttonSeachUser_OnClick
+
+'''How to get i work   
+  ' Check if its a cpr and handle webservice search
+  ' Search for is its a upn 
+  'Can we search on staff/studen ID? and card numbers? (can we se the difference?) 
+  ' If not found, make search on email aliases
+
+    'XXX 
+    
+    strSplitInput = Split(username.value, "@")
+    
+    'strDomain = "its.aau.dk"
+    strDomain = strSplitInput(1)
+
+    Set objRootDSE = GetObject("LDAP://"&strDomain&"/RootDSE")
+    ldapConnectCommand = "LDAP://" & strDomain& "/" & objRootDSE.Get("defaultNamingContext")
+    
+    'strDNSDomain = objRootDSE.Get("defaultNamingContext")
+    'sRootUserOU = "OU=Domain Users,DC=aau,DC=dk"
+    'sRootUserOU = "DC=aau,DC=dk"
+    'sRootUserOU = "DC=student,DC=aau,DC=dk"
+    'sRootUserOU = "DC=its,DC=aau,DC=dk"
+
+    'userPrincipalName
+    Set objConnection = CreateObject("ADODB.Connection")
+    objConnection.Open "Provider=ADsDSOObject;"
+    Set objCommand = CreateObject("ADODB.Command")
+    objCommand.ActiveConnection = objConnection
+
+    searchFields = "userAccountControl,sAMAccountName,userPrincipalName,aauStudentID,aauStaffID,aauUserClassification,aauUserStatus,displayName,department,proxyAddresses,badPwdCount,badPasswordTime,lockoutTime,departmentNumber,homeDirectory,homeDrive,lastLogon,memberOf,profilePath,msDS-UserPasswordExpiryTimeComputed,msDS-User-Account-Control-Computed"
+
+    'objcommand.commandtext = "<LDAP://" & sRootUserOU & ">;" & "(&(objectCategory=person)(objectClass=user)" & "(sAMAccountName=" & struserid.value &"));" & "sAMAccountName, distinguishedName;subtree" 
+    'objcommand.commandtext = "<GC://" & sRootUserOU & ">;" & "(&(objectClass=user)" & "(userPrincipalName=" & username.value & "));" & searchFields & ";subtree" 
+    'objcommand.commandtext = "<LDAP://RootDSE>;" & "(&(objectClass=user)" & "(userPrincipalName=" & username.value & "));" & searchFields & ";subtree" 
+    'objcommand.commandtext = "<LDAP://student.aau.dk/" & sRootUserOU & ">;" & "(&(objectClass=user)" & "(userPrincipalName=" & username.value & "));" & searchFields & ";subtree" 
+     objcommand.commandtext = "<"&ldapConnectCommand&">;" & "(&(objectClass=user)" & "(userPrincipalName=" & username.value & "));" & searchFields & ";subtree" 
+    
+    Set objRecordSet = objCommand.Execute
+
+    If objRecordSet.RecordCount = 0 Then
+      'strHTML = "The username " & struserid.value &" is not found in Active Directory.  Press OK to exit"
+      MsgBox "no found"
+    Else
+      'XXX: We expect RecordCount to be 1
+      'While Not objRecordset.EOF
+      'MsgBox "Found" & objRecordSet.RecordCount
+      
+      'TODO Make function insted of just making a lot of html 
+
+      'MsgBox "f:" & objRecordSet("sAMAccountName") & " " & objRecordSet("distinguishedName")
+        
+      buildHTML = "<!-- start build html -->"
+      buildHTML = buildHTML & "<h1>" & objRecordSet("userPrincipalName") & "</h1>"
+      
+      buildHTML = buildHTML & "<table>"
+      
+      
+      buildHTML = buildHTML & htmlhelpercreateTableRow("userPrincipalName",objRecordSet("userPrincipalName"))
+
+      buildHTML = buildHTML & htmlhelpercreateTableRow("aauUserStatus",objRecordSet("aauUserStatus"))
+      
+      buildHTML = buildHTML & htmlhelpercreateTableRow("aauStaffID",objRecordSet("aauStaffID"))
+      buildHTML = buildHTML & htmlhelpercreateTableRow("aauStudentID",objRecordSet("aauStudentID"))
+ 
+      'aauUserclassification = objRecordSet("aauUserClassification")
+      
+      if IsArray(objRecordSet("aauUserclassification")) then 
+        tmpArry = objRecordSet("aauUserclassification")
+        tmpClas = tmpArry(0)
+      end if
+      buildHTML = buildHTML & htmlhelpercreateTableRow("aauUserClassification",tmpClas)
+
+      buildHTML = buildHTML & htmlhelpercreateTableRow("displayName",objRecordSet("displayName"))
+      buildHTML = buildHTML & htmlhelpercreateTableRow("department",objRecordSet("department"))
+      '
+      
+      'UserAccountControl
+      'http://www.wisesoft.co.uk/scripts/vbscript_list_useraccountcontrol_values_for_local_user_account.aspx
+      CONST ADS_UF_ACCOUNTDISABLE = &H0002
+      uac = objRecordSet("userAccountControl")
+      tmpIsLocked = "False"
+      
+      if (uac AND ADS_UF_ACCOUNTDISABLE) > 0 then 
+        tmpIsLocked = "<b><font color='red'>True</font></b>"
+      end if
+      buildHTML = buildHTML & htmlhelpercreateTableRow("Account Disabled",tmpIsLocked)
+
+      buildHTML = buildHTML & htmlhelpercreateTableRow("userAccountControl",objRecordSet("userAccountControl"))
+
+      isLockedStr = "False"
+      if (Not IsNull(objRecordSet("lockoutTime"))) then 
+        tmpobj = objRecordSet("lockoutTime") 
+        if (Not (tmpobj.HighPart = 0 And tmpobj.LowPart = 0)) then 
+          isLockedStr = "<b><font color='red'>True</font></b>"
+        end if 
+      end if
+      buildHTML = buildHTML & htmlhelpercreateTableRow("Account Locked",isLockedStr)
+      buildHTML = buildHTML & htmlhelpercreateTableRow("badPwdCount",objRecordSet("badPwdCount"))
+      buildHTML = buildHTML & htmlhelpercreateTableRow("badPasswordTime",convertADDataToStr(objRecordSet("badPasswordTime")))
+
+      tmpStr = "" 
+      if IsArray(objRecordSet("departmentNumber")) then 
+        tmp = objRecordSet("departmentNumber")
+        tmpStr = tmp(0)
+      end if 
+      
+      buildHTML = buildHTML & htmlhelpercreateTableRow("departmentNumber",tmpStr)
+      
+      
+      buildHTML = buildHTML & htmlhelpercreateTableRow("profilePath",objRecordSet("profilePath"))
+      buildHTML = buildHTML & htmlhelpercreateTableRow("homeDirectory",objRecordSet("homeDirectory"))
+      buildHTML = buildHTML & htmlhelpercreateTableRow("homeDrive",objRecordSet("homeDrive"))
+
+
+
+set isexpired = objRecordSet("msDS-User-Account-Control-Computed")
+if (isexpired = &H800000&) then 
+	buildHTML = buildHTML & htmlhelpercreateTableRow("<font color='red'>Password exired</font>","<font color='red'>True</font>")
+else 
+	buildHTML = buildHTML & htmlhelpercreateTableRow("Password exired","False")
+end if
+set expiretime = objRecordSet("msDS-UserPasswordExpiryTimeComputed")
+buildHTML = buildHTML & htmlhelpercreateTableRow("Password expire date",convertADDataToStr(expiretime))
+
+
+
+      'MsgBox("DN = " & strUserDN)
+
+
+      
+      
+      buildHTML = buildHTML & htmlhelpercreateTableRow("lastLogon", convertADDataToStr(objRecordSet("lastLogon")))
+
+      'XXX Special (none text obejct)
+
+      tmpStr = ""
+      if IsArray(objRecordSet("proxyAddresses")) then 
+        tmpArry = objRecordSet("proxyAddresses")
+        
+
+        for Each pa in tmpArry
+            if InStr(lcase(pa), "smtp:") then 
+                tmpStr = tmpStr & lcase(pa) & ";<br/> "
+            end if 
+        next  
+
+      end if
+
+
+      buildHTML = buildHTML & htmlhelpercreateTableRow("proxyAddresses",tmpStr) 
+
+      buildHTML = buildHTML & "</table>"
+
+      'buildHTML = buildHTML & "<p/><p/><input type='submit' value='Reset Password'> <input type='submit' value='Unlock Account'><br /><input type='submit' value='Show Tickets'> <input type='submit' value='Create Ticket'>" 
+
+      searchresultspan.innerHTML = buildHTML
+    
+
+
+    end if
+    
+end sub 
+
+
+
+</script>
+
+<body>
+<h3>User Info</h3>
+
+<label for"username">Username/Email:</label> <input name="username" value="kyrke@its.aau.dk" /> <input id="buttonSeachUser" type="submit" value="Search"/>
+
+
+<span id="searchresultspan"></span>
+
+
+</body>
